@@ -38,6 +38,7 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
       let updatedObject: Product = {} as Product;
       let productIdObject = cart.find(product => product.id === productId)
+      const stock = await api.get(`/stock/${productId}`);
 
       if(productIdObject === undefined){
         const {data} = await api.get(`/products/${productId}`)
@@ -45,10 +46,12 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
         setCart([...cart, updatedObject]) 
         localStorage.setItem('@RocketShoes:cart', JSON.stringify([...cart, updatedObject]));
       }else{
-        const {data} = await api.get<Stock>(`/stock/${productId}`);
-        const errorCondition = productIdObject.amount + 1 > data.amount;
+        const errorCondition = productIdObject.amount + 1 > stock.data.amount;
+        if(errorCondition) {
+          toast.error('Quantidade solicitada fora de estoque');
+          return;
+        }
 
-        if(errorCondition) throw new Error('Quantidade solicitada fora de estoque');
         cart.forEach(product => {if(product.id === productId){
           product.amount += 1;
         }})
@@ -56,14 +59,15 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
         setCart([...cart])
         localStorage.setItem('@RocketShoes:cart', JSON.stringify([...cart]));
       }
-
-    } catch(e: any) {
-      toast.error(e.message || 'Erro na adição do produto'); 
+    } catch {
+      toast.error('Erro na adição do produto'); 
     }
   };
 
   const removeProduct = (productId: number) => {
     try {
+      const productIdObject= cart.find(product => product.id === productId);
+      if(!productIdObject) throw new Error();
       const updatedCart = cart.filter(product => product.id !== productId);
       setCart([...updatedCart]);
       localStorage.setItem('@RocketShoes:cart', JSON.stringify([...updatedCart]));
@@ -78,7 +82,8 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
   }: UpdateProductAmount) => {
     try {
       let productIdObject = cart.find(product => product.id === productId)
-      if(!productIdObject || amount <= 0) return;
+      if(!productIdObject) throw new Error();
+      if(amount <= 0) return;
 
       const {data} = await api.get<Stock>(`/stock/${productId}`);
       const errorCondition = amount > data.amount;
